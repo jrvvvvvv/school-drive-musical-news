@@ -1,26 +1,29 @@
 #!/usr/bin/env bash
-# publish_feed.sh <YYYY-MM-DD>
+# publish_feed.sh <YYYY-MM-DD>     (optional; run on the Mac mini)
 #
-# Run on the Mac mini AFTER `gh release create <DATE> ...` has succeeded.
-# Regenerates docs/feed.xml + docs/index.html from the repo's releases and
-# pushes them to main, where GitHub Pages (main /docs) serves the feed.
+# The GitHub Actions workflow (.github/workflows/pages.yml) rebuilds and
+# deploys the feed by itself whenever a release is published, so this script
+# is OPTIONAL. Its only job is to add nicer per-episode metadata (exact
+# duration, headlines, chapters) as podcast/episodes/<DATE>.json; pushing that
+# file to main triggers another Pages build. Without it the episode still
+# appears, titled by date, with its duration measured by ffprobe in CI.
 #
-# Steps:
+# Run it AFTER `gh release create <DATE> ...` has succeeded:
 #   1. clone the repo into $REPO_DIR if missing (gh repo clone), else pull --rebase
 #   2. confirm the release <DATE> exists and is not a draft/prerelease
-#   3. write podcast/episodes/<DATE>.json if it does not already exist, using
+#   3. write podcast/episodes/<DATE>.json if it does not already exist, from
 #      ~/kids-podcast/out/<DATE>/ (ffprobe on the MP3 for exact duration,
-#      assembly_report.json/segments.json as fallback) and
-#      ~/kids-podcast/spec_<DATE>.json ("headlines" or scene titles)
-#   4. build_feed.py (releases fetched with `gh api`, so gh's auth is used)
-#   5. validate_feed.py; abort without committing if it fails
-#   6. git add docs podcast/episodes; commit "feed: add <DATE>"; push
+#      assembly_report.json as fallback; chapters from segments.json entries
+#      with start+title) and ~/kids-podcast/spec_<DATE>.json ("headlines" or
+#      scene headline/title/id)
+#   4. sanity-build the feed into a temp dir and validate it (nothing committed)
+#   5. commit "episode metadata: <DATE>" (that file only) and push to main
 #
-# Idempotent: re-running for the same date makes no new commit when nothing
-# changed. Never deletes files, tags or releases. Exits non-zero on failure.
+# Idempotent: re-running for the same date makes no new commit. Never deletes
+# files, tags or releases. Exits non-zero with a clear message on failure.
 #
 # Env overrides:
-#   REPO_DIR   (default ~/kids-podcast/newsical-repo)
+#   REPO_DIR   (default ~/kids-podcast/school-drive-musical-news)
 #   REPO       (default jrvvvvvv/school-drive-musical-news)
 #   OUT_ROOT   (default ~/kids-podcast/out)
 #   SPEC_DIR   (default ~/kids-podcast)
@@ -38,7 +41,7 @@ DATE="${1:-}"
 [[ "$DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "usage: publish_feed.sh YYYY-MM-DD (got '${DATE}')"
 
 REPO="${REPO:-jrvvvvvv/school-drive-musical-news}"
-REPO_DIR="${REPO_DIR:-$HOME/kids-podcast/newsical-repo}"
+REPO_DIR="${REPO_DIR:-$HOME/kids-podcast/school-drive-musical-news}"
 OUT_ROOT="${OUT_ROOT:-$HOME/kids-podcast/out}"
 SPEC_DIR="${SPEC_DIR:-$HOME/kids-podcast}"
 PYTHON="${PYTHON:-python3}"
@@ -68,7 +71,7 @@ fi
 git pull --rebase --quiet origin main || die "git pull --rebase failed in $REPO_DIR"
 
 # ---- 2. release check ----------------------------------------------------
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/newsical.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/sdmn-feed.XXXXXX")"
 RELEASES_JSON="$TMP/releases.json"
 gh api "repos/$REPO/releases?per_page=100" > "$RELEASES_JSON" \
   || die "could not list releases with gh api (is gh authenticated?)"
@@ -178,22 +181,24 @@ print(f"publish_feed: wrote {meta_path}: " + ", ".join(sorted(meta)) if meta els
 PY
 fi
 
-# ---- 4/5. build + validate -----------------------------------------------
-"$PYTHON" podcast/build_feed.py --releases-json "$RELEASES_JSON" || die "build_feed.py failed"
-"$PYTHON" podcast/validate_feed.py --releases-json "$RELEASES_JSON" \
-  || die "validate_feed.py failed; nothing committed (inspect docs/feed.xml in $REPO_DIR)"
-grep -q "newsical-$DATE" docs/feed.xml || die "episode $DATE did not make it into docs/feed.xml"
+# ---- 4. sanity build + validate (temp dir, no audio; nothing generated is committed)
+CHECK_DIR="$TMP/site"
+"$PYTHON" podcast/build_feed.py --releases-json "$RELEASES_JSON" --site-dir "$CHECK_DIR" \
+  || die "build_feed.py failed; metadata not pushed"
+"$PYTHON" podcast/validate_feed.py --site-dir "$CHECK_DIR" --releases-json "$RELEASES_JSON" \
+  || die "validate_feed.py failed; metadata not pushed"
+grep -q -- "-$DATE</guid>" "$CHECK_DIR/feed.xml" || die "episode $DATE did not make it into the feed"
 
-# ---- 6. commit + push ------------------------------------------------------
-git add docs podcast/episodes
+# ---- 5. commit + push the metadata (the push triggers the Pages workflow) ---
+git add "$META"
 if git diff --cached --quiet; then
-  log "feed already up to date for $DATE; nothing to commit"
+  log "metadata for $DATE already on main; nothing to commit (the release itself already triggered the Pages build)"
   exit 0
 fi
-git commit --quiet -m "feed: add $DATE" || die "git commit failed"
+git commit --quiet -m "episode metadata: $DATE" || die "git commit failed"
 if ! git push --quiet origin main; then
   log "push rejected; rebasing once and retrying"
   git pull --rebase --quiet origin main || die "git pull --rebase failed after rejected push"
   git push --quiet origin main || die "git push failed"
 fi
-log "pushed feed for $DATE -> https://jrvvvvvv.github.io/school-drive-musical-news/feed.xml"
+log "pushed $META; the Pages workflow will rebuild the feed"

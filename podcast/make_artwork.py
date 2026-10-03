@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Render the show artwork (docs/artwork.jpg, 3000x3000 RGB JPEG) with Pillow.
+"""Render the show artwork (site/artwork.jpg, 3000x3000 RGB JPEG) with Pillow.
 
 Original design: a newspaper page whose right-hand column of type lines runs
 off the page and becomes a five-line musical staff carrying notes, over the
-show wordmark. Wordmark and tagline come from podcast/show.json
-("artwork": {"wordmark", "tagline"}), falling back to the show title.
+show wordmark. All text comes from podcast/show.json: the wordmark is the
+show "title" in capitals (or "artwork.wordmark" if set) and the tagline is
+"artwork.tagline". Re-run this after renaming the show; it also writes
+site/artwork.json, which validate_feed.py uses to catch stale artwork.
 
 Fonts: uses the first available of Poppins Bold (SIL OFL), DejaVu Sans Bold
 (Bitstream Vera/DejaVu license), Liberation Sans Bold (SIL OFL), or a macOS
 system font. No third-party logos or images are used.
 
     pip install pillow   # (add --break-system-packages on Debian/Ubuntu)
-    python3 podcast/make_artwork.py [--out docs/artwork.jpg] [--size 3000]
+    python3 podcast/make_artwork.py [--out site/artwork.jpg] [--size 3000]
 """
 from __future__ import annotations
 
@@ -207,13 +209,36 @@ def render(size: int, wordmark: str, tagline: str) -> Image.Image:
     bold = first_font(BOLD_FONTS)
     medium = first_font(MEDIUM_FONTS)
     wm_box_w, wm_box_h = U(2640), U(620)
+    lines = [wordmark]
     wf = fit_font(bold, wordmark, wm_box_w, wm_box_h, tracking=-0.01)
+    if " " in wordmark.strip():
+        # a long multi-word name reads better (and bigger) on two lines
+        words = wordmark.split()
+        best = None
+        for k in range(1, len(words)):
+            pair = [" ".join(words[:k]), " ".join(words[k:])]
+            longest = max(pair, key=len)
+            # cap height measured on "H" so both lines share one size and baseline grid
+            f2 = fit_font(bold, longest, wm_box_w, 10 ** 6, tracking=-0.01)
+            while f2.size > 10 and (f2.getbbox("H")[3] - f2.getbbox("H")[1]) > wm_box_h * 0.37:
+                f2 = ImageFont.truetype(bold, int(f2.size * 0.97))
+            if best is None or f2.size > best[1].size:
+                best = (pair, f2)
+        if best and best[1].size > wf.size * 1.25:
+            lines, wf = best
     track = -0.01 * wf.size
-    ww = text_width(wf, wordmark, track)
-    bb = wf.getbbox(wordmark)
-    wx = (W - ww) / 2 - bb[0]
-    wy = U(1900) - bb[1]
-    draw_tracked(d, (wx, wy), wordmark, wf, PAPER, track)
+    hb = wf.getbbox("H")
+    cap_h = hb[3] - hb[1]
+    gap = wm_box_h - 2 * cap_h if len(lines) > 1 else 0
+    for n, line in enumerate(lines):
+        ww = text_width(wf, line, track)
+        bb = wf.getbbox(line)
+        wx = (W - ww) / 2 - bb[0]
+        if len(lines) == 1:
+            wy = U(1900) - bb[1]
+        else:
+            wy = U(1900) + n * (cap_h + gap) - hb[1]
+        draw_tracked(d, (wx, wy), line, wf, PAPER, track)
 
     # tagline between two short rules
     tf = fit_font(medium, tagline, U(1700), U(140), tracking=0.30)
@@ -231,22 +256,30 @@ def render(size: int, wordmark: str, tagline: str) -> Image.Image:
     return img.resize((size, size), Image.LANCZOS)
 
 
+def artwork_text(show: dict):
+    """The exact text drawn on the cover; validate_feed.py compares against this."""
+    art = show.get("artwork", {})
+    return (art.get("wordmark") or show["title"]).upper(), (art.get("tagline") or "")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default=str(ROOT / "docs" / "artwork.jpg"))
+    ap.add_argument("--out", default=str(ROOT / "site" / "artwork.jpg"))
     ap.add_argument("--size", type=int, default=3000)
     ap.add_argument("--quality", type=int, default=88)
     args = ap.parse_args()
 
     show = json.loads((ROOT / "podcast" / "show.json").read_text(encoding="utf-8"))
     art = show.get("artwork", {})
-    wordmark = art.get("wordmark") or show["title"].upper()
-    tagline = art.get("tagline") or ""
+    wordmark, tagline = artwork_text(show)
 
     img = render(args.size, wordmark, tagline)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     img.save(out, "JPEG", quality=args.quality, optimize=True, progressive=False, subsampling=0)
+    sidecar = out.with_suffix(".json")
+    sidecar.write_text(json.dumps({"wordmark": wordmark, "tagline": tagline,
+                                   "size": img.size[0]}, indent=2) + "\n", encoding="utf-8")
     print(f"make_artwork: wrote {out} {img.size[0]}x{img.size[1]} {out.stat().st_size // 1024} KB")
     return 0
 

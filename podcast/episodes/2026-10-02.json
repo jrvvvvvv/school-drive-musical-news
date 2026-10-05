@@ -1,0 +1,33 @@
+{
+  "headlines": [
+    "U.S. wraps up its counter-IS troop mission in Iraq",
+    "Pentagon cuts top brass",
+    "Morocco's first woman prime minister",
+    "Tokyo's 35-day rain streak",
+    "Costume records at the Berlin Marathon"
+  ],
+  "description": "U.S. forces complete their withdrawal from Iraq's counter-Islamic State mission; the Pentagon orders a 20% cut in general and admiral positions; Morocco's king appoints the country's first woman prime minister, who now has to build a coalition; central Tokyo breaks its record with 35 straight days of rain; and Guinness World Records certifies costume records at the Berlin Marathon.",
+  "duration_seconds": 614.304,
+  "chapters": [
+    {
+      "startTime": 0,
+      "title": "Wheels Up: U.S. wraps up its counter-IS mission in Iraq"
+    },
+    {
+      "startTime": 149,
+      "title": "Count the Stars: Pentagon cuts top brass"
+    },
+    {
+      "startTime": 253,
+      "title": "The Very First: Morocco's new prime minister"
+    },
+    {
+      "startTime": 371,
+      "title": "Thirty-Five in a Row: Tokyo's rain streak"
+    },
+    {
+      "startTime": 518,
+      "title": "Dress Up, Speed Up: Berlin Marathon records"
+    }
+  ]
+}

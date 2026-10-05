@@ -1,0 +1,73 @@
+# Builds the podcast site (feed, landing page, chapters, artwork and the MP3s of
+# the newest `max_episodes` dated releases) and deploys it to GitHub Pages.
+# Requires Settings -> Pages -> Source: "GitHub Actions" (an owner-only step).
+# MP3s are fetched from Releases at build time and live only in the Pages
+# artifact, never in git history.
+name: Build and deploy podcast site
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published, released]
+  workflow_dispatch:
+  schedule:
+    # Daily backstop: 14:45 UTC = 07:45 PDT / 06:45 PST.
+    - cron: "45 14 * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build site and download episode audio
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 podcast/build_feed.py --site-dir _site --download \
+            --save-releases-json "$RUNNER_TEMP/releases.json"
+
+      - name: Validate feed
+        run: |
+          python3 podcast/validate_feed.py --site-dir _site \
+            --releases-json "$RUNNER_TEMP/releases.json" --require-audio
+
+      - name: Check site size (Pages limit is 1 GB)
+        run: |
+          bytes=$(du -sb _site | cut -f1)
+          echo "Site size: $((bytes / 1000000)) MB"
+          if [ "$bytes" -ge 900000000 ]; then
+            echo "::error::Site is ${bytes} bytes; must stay under 900 MB. Lower max_episodes in podcast/show.json."
+            exit 1
+          fi
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,6 +1,6 @@
 # school-drive-musical-news
 
-School Drive Musical News: a daily musical news episode (weekdays, ready about 7:30 AM PT). The working show title is **Newsical**. The name isn't final, and it lives only in `podcast/show.json`.
+School Drive Musical News: a daily musical news episode (weekdays, published by 7:00 AM Eastern). The working show title is **Sloppy News Now**. The name isn't final, and it lives only in `podcast/show.json`.
 
 The show is a satirical musical news recap for ages 13 and up. Each episode turns a few of the day's most important world and U.S. stories into short original songs and character scenes. The facts are sourced and fact-checked, and every episode publishes its source ledger and transcript (`sources.md`). The jokes and songs are satire.
 
@@ -122,7 +122,7 @@ It is safe to re-run, never deletes anything and exits non-zero with a message o
 
 1. **Enable GitHub Pages:** Settings → Pages → Build and deployment → Source: **GitHub Actions**. Then run the workflow once: Actions → "Build and deploy podcast site" → Run workflow, or push to `main`. Until Pages is enabled, the workflow's deploy step fails.
 2. **Set the owner email:** replace `"OWNER_EMAIL_TBD"` in `podcast/show.json` with the address for Apple/Spotify ownership verification. The feed then adds `<itunes:email>` and `<podcast:locked>yes</podcast:locked>`; both are left out while the placeholder is in place.
-3. **Pick the final show name** before submitting, since "Newsical" conflicts with an existing stage show. See "Renaming the show" above.
+3. **Confirm the final show name** before submitting (working title: "Sloppy News Now"; "Newsical" was dropped because it conflicts with an existing stage show). See "Renaming the show" above.
 4. **Submit the feed URL:**
    - in [Apple Podcasts Connect](https://podcastsconnect.apple.com/) ("Add a show with an RSS feed");
    - in [Spotify for Creators](https://creators.spotify.com/) (add an existing podcast by RSS feed).

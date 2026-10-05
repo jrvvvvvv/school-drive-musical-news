@@ -39,7 +39,7 @@ GitHub Actions .github/workflows/pages.yml
   - The show's `podcast:guid` is the standard Podcasting 2.0 UUIDv5 of the feed URL: `2bfbcbab-efef-5155-8c3f-a5c98e960865`.
   - Neither ID depends on the show title, so renaming the show doesn't change them.
 - **Publish time:** `pubDate` is 07:25 America/Los_Angeles on the episode date. It is converted with `zoneinfo`, so it is correct across daylight-saving changes.
-- **Episode metadata is optional.** `podcast/episodes/<DATE>.json` can supply `title`, `headlines`, `description`, `duration_seconds` and `chapters`. Without it:
+- **Episode metadata is optional.** `podcast/episodes/<DATE>.json`, or else an `episode.json` asset on the day's release (the daily pipeline uploads one), can supply `title`, `headlines`, `description`, `duration_seconds` and `chapters`. Titles focus on the day's top story (owner direction). Without it:
   - the episode title is the date;
   - the duration comes from `ffprobe` on the downloaded MP3, or is estimated at 192 kbps if `ffprobe` isn't available.
 - **What every episode description includes:**

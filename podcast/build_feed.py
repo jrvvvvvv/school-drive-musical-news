@@ -136,6 +136,22 @@ def load_episode_meta(date: str) -> dict:
         return {}
 
 
+def load_release_meta(release: dict) -> dict:
+    """Fallback: the daily pipeline uploads episode.json (title focused on the top story, headlines,
+    description) as a release asset. A committed podcast/episodes/<DATE>.json still wins."""
+    asset = next((a for a in release.get("assets", []) if a.get("name", "").lower() == "episode.json"), None)
+    if not asset:
+        return {}
+    try:
+        req = urllib.request.Request(asset["browser_download_url"], headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            meta = json.load(r)
+        return meta if isinstance(meta, dict) else {}
+    except (urllib.error.URLError, ValueError) as e:
+        print(f"build_feed: WARNING ignoring episode.json for {release.get('tag_name')}: {e}", file=sys.stderr)
+        return {}
+
+
 # ---------------------------------------------------------------- audio
 
 def download(url: str, dest: Path, expected: int, attempts: int = 3) -> None:
@@ -218,7 +234,7 @@ def build_episode(release: dict, show: dict, site_dir: Path, do_download: bool) 
     tag = release["tag_name"]
     day = dt.date.fromisoformat(tag)
     audio = pick_audio(release, tag)
-    meta = load_episode_meta(tag)
+    meta = load_episode_meta(tag) or load_release_meta(release)
     sources = find_asset(release, lambda n: n.lower() == "sources.md") or \
         find_asset(release, lambda n: n.lower().endswith(".md"))
     transcript = find_asset(release, lambda n: Path(n).suffix.lower() in TRANSCRIPT_TYPES)
